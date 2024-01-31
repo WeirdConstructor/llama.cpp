@@ -20,6 +20,7 @@ extern "C" {
     GGML_API           const char *          ggml_backend_buft_name            (ggml_backend_buffer_type_t buft);
     GGML_API GGML_CALL ggml_backend_buffer_t ggml_backend_buft_alloc_buffer    (ggml_backend_buffer_type_t buft, size_t size);
     GGML_API           size_t                ggml_backend_buft_get_alignment   (ggml_backend_buffer_type_t buft);
+    GGML_API           size_t                ggml_backend_buft_get_max_size    (ggml_backend_buffer_type_t buft);
     GGML_API GGML_CALL size_t                ggml_backend_buft_get_alloc_size  (ggml_backend_buffer_type_t buft, struct ggml_tensor * tensor);
     GGML_API           bool                  ggml_backend_buft_supports_backend(ggml_backend_buffer_type_t buft, ggml_backend_t backend);
     GGML_API           bool                  ggml_backend_buft_is_host         (ggml_backend_buffer_type_t buft);
@@ -36,6 +37,7 @@ extern "C" {
     GGML_API           size_t                     ggml_backend_buffer_get_size      (ggml_backend_buffer_t buffer);
     GGML_API GGML_CALL void                       ggml_backend_buffer_init_tensor   (ggml_backend_buffer_t buffer, struct ggml_tensor * tensor);
     GGML_API           size_t                     ggml_backend_buffer_get_alignment (ggml_backend_buffer_t buffer);
+    GGML_API           size_t                     ggml_backend_buffer_get_max_size  (ggml_backend_buffer_t buffer);
     GGML_API           size_t                     ggml_backend_buffer_get_alloc_size(ggml_backend_buffer_t buffer, struct ggml_tensor * tensor);
     GGML_API           void                       ggml_backend_buffer_clear         (ggml_backend_buffer_t buffer, uint8_t value);
     GGML_API           bool                       ggml_backend_buffer_is_host       (ggml_backend_buffer_t buffer);
@@ -54,6 +56,7 @@ extern "C" {
     GGML_API ggml_backend_buffer_type_t ggml_backend_get_default_buffer_type(ggml_backend_t backend);
     GGML_API ggml_backend_buffer_t      ggml_backend_alloc_buffer(ggml_backend_t backend, size_t size);
     GGML_API size_t                     ggml_backend_get_alignment(ggml_backend_t backend);
+    GGML_API size_t                     ggml_backend_get_max_size(ggml_backend_t backend);
 
     GGML_API void ggml_backend_tensor_set_async(ggml_backend_t backend,       struct ggml_tensor * tensor, const void * data, size_t offset, size_t size);
     GGML_API void ggml_backend_tensor_get_async(ggml_backend_t backend, const struct ggml_tensor * tensor,       void * data, size_t offset, size_t size);
@@ -148,6 +151,14 @@ extern "C" {
     struct ggml_backend_sched;
     typedef struct ggml_backend_sched * ggml_backend_sched_t;
 
+    // when ask == true, the scheduler wants to know if the user wants to observe this node
+    // this allows the scheduler to batch nodes together in order to evaluate them in a single call
+    //
+    // when ask == false, the scheduler is passing the node tensor to the user for observation
+    // if the user returns false, the scheduler will cancel the graph compute
+    //
+    typedef bool (*ggml_backend_sched_eval_callback)(struct ggml_tensor * t, bool ask, void * user_data);
+
     // Initialize a backend scheduler
     GGML_API ggml_backend_sched_t  ggml_backend_sched_new(ggml_backend_t * backends, ggml_backend_buffer_type_t * bufts, int n_backends, size_t graph_size);
     GGML_API void                  ggml_backend_sched_free(ggml_backend_sched_t sched);
@@ -167,6 +178,9 @@ extern "C" {
 
     // Reset all assignments and allocators - must be called before using the sched allocators to allocate inputs
     GGML_API void                  ggml_backend_sched_reset(ggml_backend_sched_t sched);
+
+    // Set a callback to be called for each resulting node during graph compute
+    GGML_API void                  ggml_backend_sched_set_eval_callback(ggml_backend_sched_t sched, ggml_backend_sched_eval_callback callback, void * user_data);
 
     //
     // Utils
