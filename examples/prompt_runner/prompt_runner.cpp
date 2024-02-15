@@ -142,7 +142,12 @@ void json_to_sparams(json sampling, llama_sampling_params &sp) {
     j2f(sampling, "mirostat_tau", sp.mirostat_tau);
     j2f(sampling, "mirostat_eta", sp.mirostat_eta);
     j2s(sampling, "grammar", sp.grammar);
-    j2s(sampling, "order", sp.samplers_sequence);
+
+    if (sampling.find("order") != sampling.end()) {
+        std::string order = sampling.value("order", "");
+        const auto sampler_names = string_split(order, ';');
+        sp.samplers_sequence = sampler_types_from_names(sampler_names);
+    }
 }
 
 json sparams_to_json(llama_sampling_params &sp);
