@@ -692,7 +692,7 @@ int main(int argc, char **argv) {
         params.prompt = gpt_random_prompt(rng);
     }
 
-    llama_backend_init(params.numa);
+    llama_backend_init();
 
     llama_model *model;
     llama_context *ctx;
