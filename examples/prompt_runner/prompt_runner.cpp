@@ -146,7 +146,7 @@ void json_to_sparams(json sampling, llama_sampling_params &sp) {
     if (sampling.find("order") != sampling.end()) {
         std::string order = sampling.value("order", "");
         const auto sampler_names = string_split(order, ';');
-        sp.samplers_sequence = sampler_types_from_names(sampler_names);
+        sp.samplers_sequence = sampler_types_from_names(sampler_names, true);
     }
 }
 
@@ -883,7 +883,7 @@ struct Inference {
             //        p1,
             //        p1_rest - n,
             //        p1 - n);
-            llama_kv_cache_seq_shift(*g_ctx, seq_id, p1_rest, p1, -n);
+            llama_kv_cache_seq_add(*g_ctx, seq_id, p1_rest, p1, -n);
             p1 -= n;
         }
 
@@ -2648,7 +2648,7 @@ int main(int argc, char **argv) {
         params.prompt = gpt_random_prompt(rng);
     }
 
-    llama_backend_init(params.numa);
+    llama_backend_init();
 
     llama_model *model;
     llama_context *ctx;

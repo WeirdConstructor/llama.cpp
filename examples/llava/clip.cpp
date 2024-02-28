@@ -616,9 +616,9 @@ static ggml_cgraph * clip_image_build_graph(clip_ctx * ctx, const clip_image_f32
             KQ = ggml_soft_max_inplace(ctx0, KQ);
             struct ggml_tensor * KQV = ggml_mul_mat(ctx0, V, KQ);
             KQV = ggml_reshape_4d(ctx0, KQV, d_head, num_positions, n_head, batch_size);
-            KQV = ggml_cont(ctx0, ggml_permute(ctx0, KQV, 0, 2, 1, 3));
+            KQV = ggml_permute(ctx0, KQV, 0, 2, 1, 3);
 
-            cur = ggml_cpy(ctx0, KQV, ggml_new_tensor_3d(ctx0, GGML_TYPE_F32, hidden_size, num_positions, batch_size));
+            cur = ggml_cont_3d(ctx0, KQV, hidden_size, num_positions, batch_size);
         }
 
         // attention output
@@ -1103,7 +1103,7 @@ struct clip_ctx * clip_model_load(const char * fname, const int verbosity = 1) {
             printf("v_image_mean       %f %f %f\n", new_clip->image_mean[0], new_clip->image_mean[1], new_clip->image_mean[2]);
             printf("v_image_std        %f %f %f\n", new_clip->image_std[0], new_clip->image_std[1], new_clip->image_std[2]);
             printf("v_image_grid_pinpoints: ");
-            for (int i = 0; i < 32 & hparams.image_grid_pinpoints[i]!=0; ++i) {
+            for (int i = 0; i < 32 && (hparams.image_grid_pinpoints[i] != 0); ++i) {
                 printf("%d ", hparams.image_grid_pinpoints[i]);
             }
             printf("\n");
@@ -1230,8 +1230,20 @@ struct clip_image_f32 * clip_image_f32_init() {
     return new clip_image_f32();
 }
 
-void clip_image_u8_free (struct clip_image_u8  * img) { delete img; }
+void clip_image_u8_free(struct clip_image_u8  * img) { delete img; }
 void clip_image_f32_free(struct clip_image_f32 * img) { delete img; }
+void clip_image_u8_batch_free(struct clip_image_u8_batch  & batch) {
+    if (batch.size > 0) {
+        delete[] batch.data;
+        batch.size = 0;
+    }
+}
+void clip_image_f32_batch_free(struct clip_image_f32_batch  & batch) {
+    if (batch.size > 0) {
+        delete[] batch.data;
+        batch.size = 0;
+    }
+}
 
 static void build_clip_img_from_data(const stbi_uc * data, int nx, int ny, clip_image_u8 * img) {
     img->nx = nx;
@@ -1494,11 +1506,8 @@ bool clip_image_preprocess(struct clip_ctx * ctx, const clip_image_u8 * img, cli
         pad_to_square = false;
     }
     // free the previous res_imgs if any set
-    if (res_imgs.size > 0 && res_imgs.size < 100) {
-        for (size_t i = 0; i < res_imgs.size; i++) {
-            clip_image_f32_free(&(res_imgs.data[i]));
-        }
-        delete[] res_imgs.data;
+    if (res_imgs.size > 0) {
+        clip_image_f32_batch_free(res_imgs);
     }
     res_imgs.data = nullptr;
     res_imgs.size = 0;
@@ -1650,7 +1659,8 @@ bool clip_image_preprocess(struct clip_ctx * ctx, const clip_image_u8 * img, cli
 
     res_imgs.size = 1;
     res_imgs.data = new clip_image_f32[res_imgs.size];
-    res_imgs.data[0] = std::move(*res);
+    res_imgs.data[0] = *res;
+    clip_image_f32_free(res);
 
     return true;
 }

@@ -315,13 +315,7 @@
 extern "C" {
 #endif
 
-#if defined(__ARM_NEON) && defined(__CUDACC__)
-    typedef half ggml_fp16_t;
-#elif defined(__ARM_NEON) && !defined(_MSC_VER)
-    typedef __fp16 ggml_fp16_t;
-#else
     typedef uint16_t ggml_fp16_t;
-#endif
 
     // convert FP16 <-> FP32
     GGML_API float       ggml_fp16_to_fp32(ggml_fp16_t x);
@@ -354,6 +348,11 @@ extern "C" {
         GGML_TYPE_IQ2_XXS = 16,
         GGML_TYPE_IQ2_XS  = 17,
         GGML_TYPE_IQ3_XXS = 18,
+        GGML_TYPE_IQ1_S   = 19,
+        GGML_TYPE_IQ4_NL  = 20,
+        GGML_TYPE_IQ3_S   = 21,
+        GGML_TYPE_IQ2_S   = 22,
+        GGML_TYPE_IQ4_XS  = 23,
         GGML_TYPE_I8,
         GGML_TYPE_I16,
         GGML_TYPE_I32,
@@ -367,9 +366,9 @@ extern "C" {
     };
 
     enum ggml_backend_type {
-        GGML_BACKEND_CPU = 0,
-        GGML_BACKEND_GPU = 10,
-        GGML_BACKEND_GPU_SPLIT = 20,
+        GGML_BACKEND_TYPE_CPU = 0,
+        GGML_BACKEND_TYPE_GPU = 10,
+        GGML_BACKEND_TYPE_GPU_SPLIT = 20,
     };
 
     // model file types
@@ -391,6 +390,11 @@ extern "C" {
         GGML_FTYPE_MOSTLY_IQ2_XXS = 15, // except 1d tensors
         GGML_FTYPE_MOSTLY_IQ2_XS  = 16, // except 1d tensors
         GGML_FTYPE_MOSTLY_IQ3_XXS = 17, // except 1d tensors
+        GGML_FTYPE_MOSTLY_IQ1_S   = 18, // except 1d tensors
+        GGML_FTYPE_MOSTLY_IQ4_NL  = 19, // except 1d tensors
+        GGML_FTYPE_MOSTLY_IQ3_S   = 20, // except 1d tensors
+        GGML_FTYPE_MOSTLY_IQ2_S   = 21, // except 1d tensors
+        GGML_FTYPE_MOSTLY_IQ4_XS  = 22, // except 1d tensors
     };
 
     // available tensor operations:
@@ -498,9 +502,9 @@ extern "C" {
     };
 
     enum ggml_object_type {
-        GGML_OBJECT_TENSOR,
-        GGML_OBJECT_GRAPH,
-        GGML_OBJECT_WORK_BUFFER
+        GGML_OBJECT_TYPE_TENSOR,
+        GGML_OBJECT_TYPE_GRAPH,
+        GGML_OBJECT_TYPE_WORK_BUFFER
     };
 
     enum ggml_log_level {
@@ -642,9 +646,9 @@ extern "C" {
     // NOTE: the INIT or FINALIZE pass is not scheduled unless explicitly enabled.
     // This behavior was changed since https://github.com/ggerganov/llama.cpp/pull/1995.
     enum ggml_task_type {
-        GGML_TASK_INIT = 0,
-        GGML_TASK_COMPUTE,
-        GGML_TASK_FINALIZE,
+        GGML_TASK_TYPE_INIT = 0,
+        GGML_TASK_TYPE_COMPUTE,
+        GGML_TASK_TYPE_FINALIZE,
     };
 
     struct ggml_compute_params {
@@ -658,6 +662,26 @@ extern "C" {
         void * wdata;
     };
 
+    // numa strategies
+    enum ggml_numa_strategy {
+        GGML_NUMA_STRATEGY_DISABLED   = 0,
+        GGML_NUMA_STRATEGY_DISTRIBUTE = 1,
+        GGML_NUMA_STRATEGY_ISOLATE    = 2,
+        GGML_NUMA_STRATEGY_NUMACTL    = 3,
+        GGML_NUMA_STRATEGY_MIRROR     = 4,
+        GGML_NUMA_STRATEGY_COUNT
+    };
+
+    //
+    // GUID
+    //
+
+    // GUID types
+    typedef uint8_t ggml_guid[16];
+    typedef ggml_guid * ggml_guid_t;
+
+    GGML_API bool ggml_guid_matches(ggml_guid_t guid_a, ggml_guid_t guid_b);
+
     // misc
 
     GGML_API void    ggml_time_init(void); // call this once at the beginning of the program
@@ -668,7 +692,7 @@ extern "C" {
 
     GGML_API void    ggml_print_backtrace(void);
 
-    GGML_API void    ggml_numa_init(void); // call once for better performance on NUMA systems
+    GGML_API void    ggml_numa_init(enum ggml_numa_strategy numa); // call once for better performance on NUMA systems
     GGML_API bool    ggml_is_numa(void); // true if init detected that system has >1 NUMA node
 
     GGML_API void    ggml_print_object (const struct ggml_object * obj);
@@ -1373,13 +1397,17 @@ extern "C" {
             struct ggml_context * ctx,
             struct ggml_tensor  * a);
 
-    // fused soft_max(a*scale + mask)
+    // fused soft_max(a*scale + mask + pos[i]*(ALiBi slope))
     // mask is optional
+    // pos is required when max_bias > 0.0f
+    // max_bias = 0.0f for no ALiBi
     GGML_API struct ggml_tensor * ggml_soft_max_ext(
             struct ggml_context * ctx,
             struct ggml_tensor  * a,
             struct ggml_tensor  * mask,
-            float                 scale);
+            struct ggml_tensor  * pos,
+            float                 scale,
+            float                 max_bias);
 
     GGML_API struct ggml_tensor * ggml_soft_max_back(
             struct ggml_context * ctx,
@@ -1481,12 +1509,13 @@ extern "C" {
 
     // alibi position embedding
     // in-place, returns view(a)
-    GGML_API struct ggml_tensor * ggml_alibi(
+    GGML_DEPRECATED(GGML_API struct ggml_tensor * ggml_alibi(
             struct ggml_context * ctx,
             struct ggml_tensor  * a,
             int                   n_past,
             int                   n_head,
-            float                 bias_max);
+            float                 bias_max),
+        "use ggml_soft_max_ext instead (will be removed in Mar 2024)");
 
     // clamp
     // in-place, returns view(a)
@@ -1634,8 +1663,8 @@ extern "C" {
 
     // sort rows
     enum ggml_sort_order {
-        GGML_SORT_ASC,
-        GGML_SORT_DESC,
+        GGML_SORT_ORDER_ASC,
+        GGML_SORT_ORDER_DESC,
     };
 
     GGML_API struct ggml_tensor * ggml_argsort(
@@ -1928,8 +1957,8 @@ extern "C" {
 
     // optimization methods
     enum ggml_opt_type {
-        GGML_OPT_ADAM,
-        GGML_OPT_LBFGS,
+        GGML_OPT_TYPE_ADAM,
+        GGML_OPT_TYPE_LBFGS,
     };
 
     // linesearch methods
@@ -1943,12 +1972,12 @@ extern "C" {
 
     // optimization return values
     enum ggml_opt_result {
-        GGML_OPT_OK = 0,
-        GGML_OPT_DID_NOT_CONVERGE,
-        GGML_OPT_NO_CONTEXT,
-        GGML_OPT_INVALID_WOLFE,
-        GGML_OPT_FAIL,
-        GGML_OPT_CANCEL,
+        GGML_OPT_RESULT_OK = 0,
+        GGML_OPT_RESULT_DID_NOT_CONVERGE,
+        GGML_OPT_RESULT_NO_CONTEXT,
+        GGML_OPT_RESULT_INVALID_WOLFE,
+        GGML_OPT_RESULT_FAIL,
+        GGML_OPT_RESULT_CANCEL,
 
         GGML_LINESEARCH_FAIL = -128,
         GGML_LINESEARCH_MINIMUM_STEP,

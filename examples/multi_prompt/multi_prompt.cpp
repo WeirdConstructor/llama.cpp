@@ -10,13 +10,14 @@
 static llama_context **g_ctx;
 static llama_model **g_model;
 
-llama_batch make_token_batch(const std::string &text, int seq_id, int p0 = 0) {
+llama_batch make_token_batch(const std::string &text, int seq_id, int p0 = 0);
+llama_batch make_token_batch(const std::string &text, int seq_id, int p0) {
     std::vector<llama_token> toks;
     toks = ::llama_tokenize(*g_model, text.c_str(), true);
 
     auto batch = llama_batch_init(toks.size(), 0, 1);
 
-    for (int i = 0; i < toks.size(); i++) {
+    for (int i = 0; i < (int)toks.size(); i++) {
         llama_batch_add(batch, toks[i], p0 + i, {seq_id}, false);
     }
 
@@ -47,7 +48,7 @@ int main(int argc, char **argv) {
 
     // init LLM
 
-    llama_backend_init(params.numa);
+    llama_backend_init();
 
     // initialize the model
 
@@ -98,7 +99,7 @@ int main(int argc, char **argv) {
         "XIFDEIFEIFE0123456780123456780123456",
         seq_prompt2,
         300);
-    int batch2_len = batch2.n_tokens;
+    // int batch2_len = batch2.n_tokens;
 
     if (decode_order_batch2_first) {
         // load sequence id=1 with [p0=300, p1=386)
