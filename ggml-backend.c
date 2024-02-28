@@ -12,7 +12,6 @@
 
 #define MAX(a, b) ((a) > (b) ? (a) : (b))
 
-
 // backend buffer type
 
 const char * ggml_backend_buft_name(ggml_backend_buffer_type_t buft) {
@@ -158,6 +157,13 @@ bool ggml_backend_buffer_copy_tensor(const struct ggml_tensor * src, struct ggml
 }
 
 // backend
+
+ggml_guid_t ggml_backend_guid(ggml_backend_t backend) {
+    if (backend == NULL) {
+        return NULL;
+    }
+    return backend->guid;
+}
 
 const char * ggml_backend_name(ggml_backend_t backend) {
     if (backend == NULL) {
@@ -756,7 +762,7 @@ GGML_CALL static bool ggml_backend_cpu_graph_compute(ggml_backend_t backend, str
 GGML_CALL static bool ggml_backend_cpu_supports_op(ggml_backend_t backend, const struct ggml_tensor * op) {
     switch (op->op) {
         case GGML_OP_CPY:
-            return op->type != GGML_TYPE_IQ2_XXS && op->type != GGML_TYPE_IQ2_XS; // missing type_traits.from_float
+            return op->type != GGML_TYPE_IQ2_XXS && op->type != GGML_TYPE_IQ2_XS && op->type != GGML_TYPE_IQ1_S; // missing type_traits.from_float
         case GGML_OP_MUL_MAT:
             return op->src[1]->type == GGML_TYPE_F32 || op->src[1]->type == ggml_internal_get_type_traits(op->src[0]->type).vec_dot_type;
         default:
@@ -781,6 +787,11 @@ static struct ggml_backend_i cpu_backend_i = {
     /* .supports_op             = */ ggml_backend_cpu_supports_op,
 };
 
+static ggml_guid_t ggml_backend_cpu_guid(void) {
+    static ggml_guid guid = { 0xaa, 0x67, 0xc7, 0x43, 0x96, 0xe6, 0xa3, 0x8a, 0xe3, 0xaf, 0xea, 0x92, 0x36, 0xbc, 0xfc, 0x89 };
+    return &guid;
+}
+
 ggml_backend_t ggml_backend_cpu_init(void) {
     struct ggml_backend_cpu_context * ctx = malloc(sizeof(struct ggml_backend_cpu_context));
     if (ctx == NULL) {
@@ -800,6 +811,7 @@ ggml_backend_t ggml_backend_cpu_init(void) {
     }
 
     *cpu_backend = (struct ggml_backend) {
+        /* .guid      = */ ggml_backend_cpu_guid(),
         /* .interface = */ cpu_backend_i,
         /* .context   = */ ctx
     };
@@ -807,7 +819,7 @@ ggml_backend_t ggml_backend_cpu_init(void) {
 }
 
 GGML_CALL bool ggml_backend_is_cpu(ggml_backend_t backend) {
-    return backend && backend->iface.get_name == ggml_backend_cpu_name;
+    return backend != NULL && ggml_guid_matches(backend->guid, ggml_backend_cpu_guid());
 }
 
 void ggml_backend_cpu_set_n_threads(ggml_backend_t backend_cpu, int n_threads) {
@@ -1006,6 +1018,7 @@ static int ggml_backend_sched_backend_from_buffer(ggml_backend_sched_t sched, gg
         }
     }
     GGML_ASSERT(false && "tensor buffer type not supported by any backend");
+    return -1; // silence warning
 }
 
 #if 0
@@ -1040,7 +1053,7 @@ static int ggml_backend_sched_backend_id_from_cur(ggml_backend_sched_t sched, st
     for (int i = 0; i < GGML_MAX_SRC; i++) {
         const struct ggml_tensor * src = tensor->src[i];
         if (src == NULL) {
-            break;
+            continue;
         }
         if (src->buffer != NULL && src->buffer->usage == GGML_BACKEND_BUFFER_USAGE_WEIGHTS) {
             int src_backend = ggml_backend_sched_backend_from_buffer(sched, src->buffer);
@@ -1087,7 +1100,7 @@ static void ggml_backend_sched_print_assignments(ggml_backend_sched_t sched, str
         for (int j = 0; j < GGML_MAX_SRC; j++) {
             struct ggml_tensor * src = node->src[j];
             if (src == NULL) {
-                break;
+                continue;
             }
             ggml_backend_t src_backend = tensor_backend(src);
             fprintf(stderr, " %20.20s (%5.5s) [%5.5s %8.8s]", src->name,
@@ -1143,7 +1156,7 @@ static void ggml_backend_sched_split_graph(ggml_backend_sched_t sched, struct gg
         for (int j = 0; j < GGML_MAX_SRC; j++) {
             struct ggml_tensor * src = node->src[j];
             if (src == NULL) {
-                break;
+                continue;
             }
             if (tensor_backend_id(src) == -1) {
                 tensor_backend_id(src) = ggml_backend_sched_backend_id_from_cur(sched, src);
@@ -1255,7 +1268,7 @@ static void ggml_backend_sched_split_graph(ggml_backend_sched_t sched, struct gg
         for (int j = 0; j < GGML_MAX_SRC; j++) {
             struct ggml_tensor * src = node->src[j];
             if (src == NULL) {
-                break;
+                continue;
             }
             int src_backend_id = tensor_backend_id(src);
             if (src_backend_id == -1) {
@@ -1314,7 +1327,7 @@ static void ggml_backend_sched_split_graph(ggml_backend_sched_t sched, struct gg
             for (int j = 0; j < GGML_MAX_SRC; j++) {
                 struct ggml_tensor * src = node->src[j];
                 if (src == NULL) {
-                    break;
+                    continue;
                 }
                 int src_backend_id = tensor_backend_id(src);
                 assert(src_backend_id != -1); // all inputs should be assigned by now
@@ -1361,7 +1374,7 @@ static void ggml_backend_sched_split_graph(ggml_backend_sched_t sched, struct gg
         for (int j = 0; j < GGML_MAX_SRC; j++) {
             struct ggml_tensor * src = node->src[j];
             if (src == NULL) {
-                break;
+                continue;
             }
             ggml_backend_t src_backend = tensor_backend(src);
             if (src_backend != tensor_backend /* && src_backend != NULL */) {
@@ -1667,7 +1680,7 @@ static struct ggml_tensor * graph_copy_dup_tensor(struct ggml_hash_set hash_set,
     for (int i = 0; i < GGML_MAX_SRC; i++) {
         struct ggml_tensor * s = src->src[i];
         if (s == NULL) {
-            break;
+            continue;
         }
         dst->src[i] = graph_copy_dup_tensor(hash_set, node_copies, ctx_allocated, ctx_unallocated, s);
     }
@@ -1696,7 +1709,7 @@ static void graph_copy_init_tensor(struct ggml_hash_set hash_set, struct ggml_te
     for (int i = 0; i < GGML_MAX_SRC; i++) {
         struct ggml_tensor * s = src->src[i];
         if (s == NULL) {
-            break;
+            continue;
         }
         graph_copy_init_tensor(hash_set, node_copies, node_init, s);
     }
