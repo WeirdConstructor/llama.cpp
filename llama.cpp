@@ -2445,7 +2445,7 @@ static uint32_t llama_kv_cache_cell_max(const struct llama_kv_cache & cache) {
     return 0;
 }
 
-int32_t llama_kv_cache_usage(llama_context & lctx) {
+int32_t llama_kv_cache_usage(const struct llama_context & lctx) {
     auto & kv_self = lctx.kv_self;
     return llama_kv_cache_cell_max(kv_self);
 }

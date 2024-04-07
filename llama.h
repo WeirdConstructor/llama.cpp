@@ -534,7 +534,7 @@ extern "C" {
                        llama_pos   p0,
                        llama_pos   p1);
 
-    LLAMA_API int32_t llama_kv_cache_usage(llama_context & lctx);
+    LLAMA_API int32_t llama_kv_cache_usage(const struct llama_context & lctx);
 
     // Copy all tokens that belong to the specified sequence to another sequence
     // Note that this does not allocate extra KV cache memory - it simply assigns the tokens to the new sequence
