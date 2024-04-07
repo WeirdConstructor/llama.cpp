@@ -31,6 +31,8 @@ let package = Package(
             sources: [
                 "ggml.c",
                 "llama.cpp",
+                "unicode.cpp",
+                "unicode-data.cpp",
                 "ggml-alloc.c",
                 "ggml-backend.c",
                 "ggml-quants.c",

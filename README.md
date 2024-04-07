@@ -8,12 +8,23 @@
 
 Inference of Meta's [LLaMA](https://arxiv.org/abs/2302.13971) model (and others) in pure C/C++
 
+### Recent API changes
+
+- [2024 Mar 26] Logits and embeddings API updated for compactness https://github.com/ggerganov/llama.cpp/pull/6122
+- [2024 Mar 13] Add `llama_synchronize()` + `llama_context_params.n_ubatch` https://github.com/ggerganov/llama.cpp/pull/6017
+- [2024 Mar 8] `llama_kv_cache_seq_rm()` returns a `bool` instead of `void`, and new `llama_n_seq_max()` returns the upper limit of acceptable `seq_id` in batches (relevant when dealing with multiple sequences) https://github.com/ggerganov/llama.cpp/pull/5328
+- [2024 Mar 4] Embeddings API updated https://github.com/ggerganov/llama.cpp/pull/5796
+- [2024 Mar 3] `struct llama_context_params` https://github.com/ggerganov/llama.cpp/pull/5849
+
 ### Hot topics
 
-- Support for chat templates: [Wiki (contributions welcome)](https://github.com/ggerganov/llama.cpp/wiki/Templates-supported-by-llama_chat_apply_template)
-- Support for Gemma models: https://github.com/ggerganov/llama.cpp/pull/5631
-- Non-linear quantization IQ4_NL: https://github.com/ggerganov/llama.cpp/pull/5590
-- Looking for contributions to improve and maintain the `server` example: https://github.com/ggerganov/llama.cpp/issues/4216
+- **MoE memory layout has been updated - reconvert models for `mmap` support and regenerate `imatrix` https://github.com/ggerganov/llama.cpp/pull/6387**
+- Model sharding instructions using `gguf-split` https://github.com/ggerganov/llama.cpp/discussions/6404
+- Fix major bug in Metal batched inference https://github.com/ggerganov/llama.cpp/pull/6225
+- Multi-GPU pipeline parallelism support https://github.com/ggerganov/llama.cpp/pull/6017
+- Looking for contributions to add Deepseek support: https://github.com/ggerganov/llama.cpp/issues/5981
+- Quantization blind testing: https://github.com/ggerganov/llama.cpp/discussions/5962
+- Initial Mamba support has been added: https://github.com/ggerganov/llama.cpp/pull/5328
 
 ----
 
@@ -104,6 +115,10 @@ Typically finetunes of the base models below are supported as well.
 - [x] [InternLM2](https://huggingface.co/models?search=internlm2)
 - [x] [CodeShell](https://github.com/WisdomShell/codeshell)
 - [x] [Gemma](https://ai.google.dev/gemma)
+- [x] [Mamba](https://github.com/state-spaces/mamba)
+- [x] [Xverse](https://huggingface.co/models?search=xverse)
+- [x] [Command-R](https://huggingface.co/CohereForAI/c4ai-command-r-v01)
+- [x] [SEA-LION](https://huggingface.co/models?search=sea-lion)
 
 **Multimodal models:**
 
@@ -125,7 +140,9 @@ Typically finetunes of the base models below are supported as well.
 - Node.js: [withcatai/node-llama-cpp](https://github.com/withcatai/node-llama-cpp)
 - JS/TS (llama.cpp server client): [lgrammel/modelfusion](https://modelfusion.dev/integration/model-provider/llamacpp)
 - JavaScript/Wasm (works in browser): [tangledgroup/llama-cpp-wasm](https://github.com/tangledgroup/llama-cpp-wasm)
+- Typescript/Wasm (nicer API, available on npm): [ngxson/wllama](https://github.com/ngxson/wllama)
 - Ruby: [yoshoku/llama_cpp.rb](https://github.com/yoshoku/llama_cpp.rb)
+- Rust (more features): [edgenai/llama_cpp-rs](https://github.com/edgenai/llama_cpp-rs)
 - Rust (nicer API): [mdrokz/rust-llama.cpp](https://github.com/mdrokz/rust-llama.cpp)
 - Rust (more direct bindings): [utilityai/llama-cpp-rs](https://github.com/utilityai/llama-cpp-rs)
 - C#/.NET: [SciSharp/LLamaSharp](https://github.com/SciSharp/LLamaSharp)
@@ -135,6 +152,7 @@ Typically finetunes of the base models below are supported as well.
 - Java: [kherud/java-llama.cpp](https://github.com/kherud/java-llama.cpp)
 - Zig: [deins/llama.cpp.zig](https://github.com/Deins/llama.cpp.zig)
 - Flutter/Dart: [netdur/llama_cpp_dart](https://github.com/netdur/llama_cpp_dart)
+- PHP (API bindings and features built on top of llama.cpp): [distantmagic/resonance](https://github.com/distantmagic/resonance) [(more info)](https://github.com/ggerganov/llama.cpp/pull/6326)
 
 **UI:**
 
@@ -155,11 +173,17 @@ Unless otherwise noted these projects are open-source with permissive licensing:
 - [cztomsik/ava](https://github.com/cztomsik/ava) (MIT)
 - [ptsochantaris/emeltal](https://github.com/ptsochantaris/emeltal)
 - [pythops/tenere](https://github.com/pythops/tenere) (AGPL)
+- [RecurseChat](https://recurse.chat/) (proprietary)
 - [semperai/amica](https://github.com/semperai/amica)
 - [withcatai/catai](https://github.com/withcatai/catai)
 - [Mobile-Artificial-Intelligence/maid](https://github.com/Mobile-Artificial-Intelligence/maid) (MIT)
 - [Msty](https://msty.app) (proprietary)
 - [LLMFarm](https://github.com/guinmoon/LLMFarm?tab=readme-ov-file) (MIT)
+- [KanTV](https://github.com/zhouwg/kantv?tab=readme-ov-file)(Apachev2.0 or later)
+- [Dot](https://github.com/alexpinel/Dot) (GPL)
+- [MindMac](https://mindmac.app) (proprietary)
+
+*(to have a project listed here, it should clearly state that it depends on `llama.cpp`)*
 
 ---
 
@@ -435,30 +459,27 @@ Building the program with BLAS support may lead to some performance improvements
 
   Check [Optimizing and Running LLaMA2 on Intel® CPU](https://www.intel.com/content/www/us/en/content-details/791610/optimizing-and-running-llama2-on-intel-cpu.html) for more information.
 
-- #### cuBLAS
+- #### CUDA
 
-  This provides BLAS acceleration using the CUDA cores of your Nvidia GPU. Make sure to have the CUDA toolkit installed. You can download it from your Linux distro's package manager (e.g. `apt install nvidia-cuda-toolkit`) or from here: [CUDA Toolkit](https://developer.nvidia.com/cuda-downloads).
+  This provides GPU acceleration using the CUDA cores of your Nvidia GPU. Make sure to have the CUDA toolkit installed. You can download it from your Linux distro's package manager (e.g. `apt install nvidia-cuda-toolkit`) or from here: [CUDA Toolkit](https://developer.nvidia.com/cuda-downloads).
 
   For Jetson user, if you have Jetson Orin, you can try this: [Offical Support](https://www.jetson-ai-lab.com/tutorial_text-generation.html). If you are using an old model(nano/TX2), need some additional operations before compiling.
 
   - Using `make`:
     ```bash
-    make LLAMA_CUBLAS=1
+    make LLAMA_CUDA=1
     ```
   - Using `CMake`:
 
     ```bash
     mkdir build
     cd build
-    cmake .. -DLLAMA_CUBLAS=ON
+    cmake .. -DLLAMA_CUDA=ON
     cmake --build . --config Release
     ```
 
   The environment variable [`CUDA_VISIBLE_DEVICES`](https://docs.nvidia.com/cuda/cuda-c-programming-guide/index.html#env-vars) can be used to specify which GPU(s) will be used. The following compilation options are also available to tweak performance:
 
-<!---
-  | LLAMA_CUDA_CUBLAS       | Boolean                |   false | Use cuBLAS instead of custom CUDA kernels for prompt processing. Faster for all quantization formats except for q4_0 and q8_0, especially for k-quants. Increases VRAM usage (700 MiB for 7b, 970 MiB for 13b, 1430 MiB for 33b). |
---->
   | Option                         | Legal values           | Default | Description |
   |--------------------------------|------------------------|---------|-------------|
   | LLAMA_CUDA_FORCE_DMMV          | Boolean                |   false | Force the use of dequantization + matrix vector multiplication kernels instead of using kernels that do matrix vector multiplication on quantized data. By default the decision is made based on compute capability (MMVQ for 6.1/Pascal/GTX 1000 or higher). Does not affect k-quants. |
@@ -785,7 +806,7 @@ And after 4.45 hours, you will have the final perplexity.
 ### Interactive mode
 
 If you want a more ChatGPT-like experience, you can run in interactive mode by passing `-i` as a parameter.
-In this mode, you can always interrupt generation by pressing Ctrl+C and entering one or more lines of text, which will be converted into tokens and appended to the current context. You can also specify a *reverse prompt* with the parameter `-r "reverse prompt string"`. This will result in user input being prompted whenever the exact tokens of the reverse prompt string are encountered in the generation. A typical use is to use a prompt that makes LLaMa emulate a chat between multiple users, say Alice and Bob, and pass `-r "Alice:"`.
+In this mode, you can always interrupt generation by pressing Ctrl+C and entering one or more lines of text, which will be converted into tokens and appended to the current context. You can also specify a *reverse prompt* with the parameter `-r "reverse prompt string"`. This will result in user input being prompted whenever the exact tokens of the reverse prompt string are encountered in the generation. A typical use is to use a prompt that makes LLaMA emulate a chat between multiple users, say Alice and Bob, and pass `-r "Alice:"`.
 
 Here is an example of a few-shot interaction, invoked with the command
 
@@ -849,7 +870,7 @@ Sample run:
 ```
 == Running in interactive mode. ==
  - Press Ctrl+C to interject at any time.
- - Press Return to return control to LLaMa.
+ - Press Return to return control to LLaMA.
  - If you want to submit another line, end your input in '\'.
 
  Below is an instruction that describes a task. Write a response that appropriately completes the request.
@@ -896,6 +917,9 @@ First, install the essential packages for termux:
 pkg install clang wget git cmake
 ```
 Second, obtain the [Android NDK](https://developer.android.com/ndk) and then build with CMake:
+
+You can execute the following commands on your computer to avoid downloading the NDK to your mobile. Of course, you can also do this in Termux.
+
 ```
 $ mkdir build-android
 $ cd build-android
@@ -904,7 +928,28 @@ $ cmake -DCMAKE_TOOLCHAIN_FILE=$NDK/build/cmake/android.toolchain.cmake -DANDROI
 $ make
 ```
 Install [termux](https://termux.dev/) on your device and run `termux-setup-storage` to get access to your SD card.
-Finally, copy the `llama` binary and the model files to your device storage. Here is a demo of an interactive session running on Pixel 5 phone:
+Finally, copy these built `llama` binaries and the model file to your device storage. Because the file permissions in the Android sdcard cannot be changed, you can copy the executable files to the `/data/data/com.termux/files/home/bin` path, and then execute the following commands in Termux to add executable permission:
+
+(Assumed that you have pushed the built executable files to the /sdcard/llama.cpp/bin path using `adb push`)
+```
+$cp -r /sdcard/llama.cpp/bin /data/data/com.termux/files/home/
+$cd /data/data/com.termux/files/home/bin
+$chmod +x ./*
+```
+
+Download model [llama-2-7b-chat.Q4_K_M.gguf](https://huggingface.co/TheBloke/Llama-2-7B-Chat-GGUF/blob/main/llama-2-7b-chat.Q4_K_M.gguf), and push it to `/sdcard/llama.cpp/`, then move it to `/data/data/com.termux/files/home/model/`
+
+```
+$mv /sdcard/llama.cpp/llama-2-7b-chat.Q4_K_M.gguf /data/data/com.termux/files/home/model/
+```
+
+Now, you can start chatting:
+```
+$cd /data/data/com.termux/files/home/bin
+$./main -m ../model/llama-2-7b-chat.Q4_K_M.gguf -n 128 -cml
+```
+
+Here is a demo of an interactive session running on Pixel 5 phone:
 
 https://user-images.githubusercontent.com/271616/225014776-1d567049-ad71-4ef2-b050-55b0b3b9274c.mp4
 
