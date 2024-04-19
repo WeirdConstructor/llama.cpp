@@ -145,8 +145,7 @@ void json_to_sparams(json sampling, llama_sampling_params &sp) {
 
     if (sampling.find("order") != sampling.end()) {
         std::string order = sampling.value("order", "");
-        const auto sampler_names = string_split(order, ';');
-        sp.samplers_sequence = sampler_types_from_names(sampler_names, true);
+        sp.samplers_sequence = sampler_types_from_chars(order);
     }
 }
 
@@ -185,7 +184,16 @@ json sparams_to_json(llama_sampling_params &sp) {
     j_params["mirostat_tau"] = sp.mirostat_tau;
     j_params["mirostat_eta"] = sp.mirostat_eta;
     j_params["penalize_nl"] = sp.penalize_nl;
-    j_params["order"] = sp.samplers_sequence;
+
+    std::string sampler_type_chars;
+    std::string sampler_type_names;
+    for (const auto sampler_type : sp.samplers_sequence) {
+        sampler_type_chars += static_cast<char>(sampler_type);
+        sampler_type_names += sampler_type_to_name_string(sampler_type) + ";";
+    }
+    sampler_type_names.pop_back();
+
+    j_params["order"] = sampler_type_chars;
     j_params["order_text"] = llama_sampling_order_print(sp);
     j_params["grammar"] = sp.grammar;
 
@@ -999,7 +1007,7 @@ struct Inference {
         //        is_bos,
         //        text.c_str());
         std::vector<llama_token> tokens;
-        tokens = ::llama_tokenize(*g_ctx, text.c_str(), add_bos, true, !is_bos);
+        tokens = ::llama_tokenize(*g_ctx, text.c_str(), false, false, !is_bos);
         return tokens;
     }
 
@@ -2787,6 +2795,13 @@ int main(int argc, char **argv) {
                 fprintf(stderr,
                         "sampling: \n%s\n",
                         llama_sampling_print(test_sparams).c_str());
+
+                    json x = sparams_to_json(test_sparams);
+                    std::string res = x.dump(
+                        2, ' ', false, json::error_handler_t::replace);
+                fprintf(stderr,
+                        "sampling json: \n%s\n",
+                        res.c_str());
             }
 
             if (prompt_test.find("chat") != prompt_test.end()) {
